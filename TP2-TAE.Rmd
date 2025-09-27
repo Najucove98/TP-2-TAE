@@ -1,18 +1,111 @@
 ---
-title: "R Notebook"
-output: html_notebook
+title: "Trabajo Práctico Nº2 - Análisis Exploratorio de Datos"
+author: "Nahuel Coveñas - Milena Aranda"
+lang: es
+editor: source
+toc: true
+format: 
+  html:
+    self-contained: true
+    df-print: paged
+    theme: cerulean
+    code-fold: true
+knitr:
+  opts_chunk: 
+    echo: false
+    message: false
+    warning: false
+    fig.align: center
+lightbox: true
 ---
 
-This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+```{r}
+library(tidyverse)
+library(countrycode) #capaz no lo usamos
 
-Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+# Carga de los datos
+cookies <- read.delim("cookies.txt")
+
+
+summary(cookies)
+```
+# Introducción
+
+
+Trabajamos sobre estados unidos? justificarlo con graficos
+
+# Objetivo 1
+
+Ver la evolucion de la cantidad de compras a lo largo de los meses
+Ver la evoluxion de compras en dias especiales
+ver la evolucion de compras a lo largo del mes
 
 ```{r}
-plot(cars)
+#Posible interrogante
+datos_gastos <- filter(cookies, gasto > 0)
+
+datos_gastos %>% 
+  count(pais, sort = TRUE)
+
+# 5277 observaciones del total hicieron compras
+dim(datos_gastos)
+
 ```
 
-Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
 
-When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
 
-The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+
+# Objetivo 2 
+Ver proporcion de individuos q usan distintos navegadores 
+Ver su relacion con los gastos o con los gastos de estados unidos
+
+```{r}
+
+# grafico de barras para los dispositivos dentro de la base de estados unidos
+cookies %>% 
+  count(dispositivo, sort = TRUE)
+
+
+# grafico de barras para los navegadores dentro de la base de estados unidos
+
+cookies %>% 
+  count(browser, sort = TRUE)
+```
+
+# Objetivo 3
+Filtrar los datos para individuos con un tiempo de duracion de la visitia al sitio web > 1 (esto elimina valores con clicks = 1 y valores con paginas = 1)
+
+Grafico de dispersion para ver si hay relacion entre las variables clicks y gasto
+dentro de la base que si gastaron
+comparar con la alternativa : graf de dispersion entre paginas y gasto
+
+## Interrogante: ¿Los usuarios que tienen mas paginas/clicks/tiempo accedidas tienden a realizar gastos mas grandes?
+
+
+# Objetivo 4 
+utilizar la variable dispositivo para ver relaciones con otras variables
+
+
+
+# Objetivo 5 
+
+Los visitantes frecuentes muestran un gasto mayor o menor que los visitantes unicos (subgrupos de visitantes frecuentes, ¿ == 1 o > 1 ? ) ver como queda por promedio o total, grafico de barras
+
+Ver la relacion entre un usuario mas frecuente gasta mas en la pagina (grafico de dispersion)
+
+```{r}
+datos_gastos %>% 
+  count(ID, sort = TRUE)
+
+
+# Contar cuántas visitas hizo cada ID
+visitas_por_id <- datos_gastos %>%
+  group_by(ID) %>%
+  summarise(n_visitas = n(),
+            gasto_total = sum(gasto),
+            gasto_promedio = mean(gasto))
+```
+
+
+
+
