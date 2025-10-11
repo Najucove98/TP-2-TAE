@@ -58,27 +58,17 @@ analizados mediante gr´aficos y tablas.
 
 
 
-
+##Objetivo 1 (grafico de geolocalizacion)
 
 ```{r}
-n_visitas <- nrow(cookies)
-n_compras <- nrow(filter(cookies, gasto > 0))
-
-```
-Trabajamos sobre estados unidos? justificarlo
-
-```{r} 
-# Datos de estados unidos
-
-cookies_eeuu <- filter(cookies, pais == "United States")
-
-summary(cookies_eeuu)
-
-nrow(cookies_eeuu)
+cookies %>% 
+  count(pais, sort = TRUE)  # cuenta y ordena de mayor a menor
 ```
 
 
-# Objetivo 1
+
+
+
 
 ```{r}
 #Posible interrogante
@@ -93,74 +83,103 @@ datos_gastos %>%
 
 # 5277 observaciones del total hicieron compras 
 #dim(datos_gastos)
-```
-
-```{r}
-library(echarts4r) # crea gráficos interactivos
-library(gapminder) # una base de datos de estadísticas demográficas.
-library(plotly)
-
-#---------------------------------------------------------------------------------------------------
-
 filtrado <- gapminder %>% 
-  mutate(pobl = pop / 1000000) %>% # Crea/modifica la columna 'pobl' (población) dividiendo la columna 'pop' (población) por un millón (1,000,000) para expresarla en millones.
-  filter(                  # Filtra las filas del dataset.
-    country %in% c("Argentina", "Brazil", "Colombia", "Ecuador", "Chile", # Mantiene solo las filas donde el país ('country') está en el vector de países sudamericanos especificados.
-                   "Paraguay", "Bolivia", "Peru", "Uruguay", "Venezuela") # Continúa el vector de países.
+  mutate(pobl = pop / 1000000) %>% # Crea la columna 'pobl'
+  filter(
+    country %in% c("Argentina", "Brazil", "Colombia", "Ecuador", "Chile",
+                   "Paraguay", "Bolivia", "Peru", "Uruguay", "Venezuela")
   )
 
-#---------------------------------------------------------------------------------------------------
 
-#crea un grafico estatico con los datos de interes
-serie_sudam <- ggplot(data = filtrado) + # Inicia la construcción de un gráfico estático de 'ggplot2' (asignado a 'serie_sudam') usando el dataset 'filtrado'.
-  aes(x = year, y = pobl, color = country) + # Define las 'estéticas' (mapeos visuales): 'year' para el eje X, 'pobl' (población en millones) para el eje Y, y 'country' para el color de las líneas.
-  geom_line(linewidth = 1) + # Añade una capa de líneas (gráfico de líneas de tiempo), con un grosor de 1.
-  geom_point(size = 2) + # Añade una capa de puntos sobre las líneas, con un tamaño de 2.
-  scale_x_continuous(breaks = seq(1952, 2007, 5)) + # Personaliza el eje X: establece saltos cada 5 años, desde 1952 hasta 2007.
-  scale_y_continuous(breaks = seq(0, 200, 50), limits = c(0, 200)) + # Personaliza el eje Y: establece saltos de 50 en 50, con límites de 0 a 200.
-  labs(x = "Año", y = "Población (en millones)", # Define las etiquetas de los ejes X e Y.
-       title = "Evolución de la población de los países sudamericanos") + # Define el título principal del gráfico.
-  theme_bw() # Aplica un tema de fondo blanco y rejilla para una apariencia limpia.
+datos_filtrados <- cookies |> 
+  filter(
+    pais %in% c("United States", "Canada", "Japan", "Taiwan", "Venezuela", "Mexico", "Australia", "Brazil", "Singapore")
+  ) |> 
+  group_by(pais) |> 
+  summarise(count = sum(gasto > 0))
 
-#---------------------------------------------------------------------------------------------------
 
-#se usa para hacer interactivo el grafico
-ggplotly(serie_sudam)
 
-#---------------------------------------------------------------------------------------------------
+```
+```{r}
+datos_agrupados <- cookies %>%
+  mutate(grupo = ifelse(pais == "United States", "Estados Unidos", "Otros"))
 
-#una mejor visualizacion del grafico anterior
-filtrado %>%
-  group_by(country) %>% # Agrupa los datos por 'country' (país). *Esto es un requisito para que 'e_charts' dibuje series separadas por país.*
-  e_charts(x = year) %>% # Inicia la creación de un gráfico interactivo con 'echarts4r', mapeando 'year' al eje X.
-  e_line(serie = pobl) %>% # Añade un gráfico de líneas, usando 'pobl' (población en millones) como los valores de la serie (eje Y).
-  e_title("Evolución de la población de los países sudamericanos") %>% # Define el título del gráfico interactivo.
-  e_x_axis(name = "Año", serie = year) %>% # Define el nombre del eje X como "Año" y usa la columna 'year' como datos.
-  e_y_axis(name = "Población (en millones)") %>% # Define el nombre del eje Y como "Población (en millones)".
-  e_legend(orient = "vertical", left = "10%", top = "10%") %>% # Personaliza la leyenda: orientación vertical, posicionada al 10% desde la izquierda y 10% desde arriba.
-  e_tooltip(trigger = "axis") # Configura las tooltips (información emergente al pasar el ratón) para que se muestre al pasar sobre el eje X.
+gasto_por_grupo <- datos_agrupados |> 
+  mutate(gasto_miles = gasto/1000) |> 
+  group_by(grupo) %>%
+  summarise(gasto_total = sum(gasto_miles, na.rm = TRUE),
+            gasto_promedio = mean(gasto_miles, na.rm = TRUE),
+            n_visitas = n()) %>%
+  arrange(desc(gasto_total))
+
+ggplot(gasto_por_grupo, aes(x = grupo, y = gasto_total, fill = grupo)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Gasto total: Estados Unidos vs. Otros países",
+       x = "", y = "Gasto total (USD x miles)") +
+  theme_minimal() +
+  theme(legend.position = "none")
 ```
 
 
 
-# Objetivo 2 
+```{r} 
+# Datos de estados unidos
+
+cookies_eeuu <- filter(cookies, pais == "United States")
+
+summary(cookies_eeuu)
+
+nrow(cookies_eeuu)
+```
+
+## Objetivo 2 (linea de tiempo sobre el gasto de estados unidos vs otros)
 
 ```{r}
-#Posible interrogante
-# Ver proporcion de individuos q usan distintos navegadores 
-# Ver su relacion con los gastos o con los gastos de estados unidos
+cookies_fecha <- datos_agrupados |>  
+  mutate(fecha = as.Date(as.character(fecha), format = "%Y%m%d"))
 
-# grafico de barras para los dispositivos dentro de la base de estados unidos
-cookies %>% 
-  count(dispositivo, sort = TRUE)
+cookies_dispositivos_diarios <- cookies_fecha |> 
+  group_by(fecha, grupo) |> 
+  summarise(gasto_dia = sum(gasto, na.rm = TRUE))
 
-# grafico de barras para los navegadores dentro de la base de estados unidos
+#una mejor visualizacion del grafico anterior
+cookies_dispositivos_diarios %>%
+  group_by(grupo) %>% # Agrupa los datos por 'country' (país).
+  e_charts(x = fecha) %>% # mapeando 'year' al eje X.
+  e_line(serie = gasto_dia) %>% # usa 'pobl' como los valores de la serie (eje Y).
+  e_title("Evolución de la población de los países sudamericanos") %>% # Define el título del gráfico interactivo.
+  e_x_axis(name = "Dia", serie = fecha) %>% # Define el nombre del eje X y usa la columna 'year' como datos.
+  e_y_axis(name = "Gasto (en USD)") %>% # Define el nombre del eje y.
+  e_legend(orient = "vertical", left = "10%", top = "10%") %>% # Personaliza la leyenda: orientación vertical, posicionada al 10% desde la izquierda y 10% desde arriba.
+  e_tooltip(trigger = "axis") # Configura las tooltips (información emergente al pasar el ratón) para que se muestre al pasar sobre el eje X.
 
-cookies %>% 
-  count(browser, sort = TRUE)
 ```
 
+Conclusion
+
+
+
 # Objetivo 3
+
+```{r}
+usuarios <- cookies |>
+  group_by(ID) |> 
+  summarise(paginas = sum(paginas, na.rm = TRUE),
+            clicks = sum(clicks, na.rm = TRUE),
+            tiempo = (sum(tiempo, na.rm = TRUE)/60),
+            gasto = sum(gasto, na.rm = T),
+            entradas = n()) |> 
+  filter(gasto > 0)
+
+grafico <- ggplot(data = usuarios) +
+  aes(x = paginas, y = gasto) +
+  geom_point()
+
+ggplotly(grafico)
+
+```
+
 
 Interrogante: ¿Los usuarios que tienen mas paginas/clicks/tiempo accedidas tienden a realizar gastos mas grandes?
 
@@ -180,6 +199,13 @@ table(cookies$browser, cookies$dispositivo)
 ```
 
 # Objetivo 5 
+```{r}
+usuarios |> 
+  count(entradas, sort = T)
+
+#Idea podemos agrupar por cantidad de entradas unicas y graficar el promedio de los totales
+```
+
 
 Los visitantes frecuentes muestran un gasto mayor o menor que los visitantes unicos (subgrupos de visitantes frecuentes, ¿ == 1 o > 1 ? ) ver como queda por promedio o total, grafico de barras
 
@@ -198,46 +224,18 @@ visitas_por_id <- datos_gastos %>%
             gasto_promedio = mean(gasto))
 ```
 
-# Objetivo 6
+## Objetivo 3
 
 ```{r}
 # El uso de las tablas dinamicas requiere un procesamiento de los datos
 
-santafe <- cultivos %>% 
-  filter(
-    prov == "SANTA FE", 
-    campaña == "2019/20",
-    !cultivo %in% c("Soja 1ra", "Soja 2da")
-    ) %>% 
-  group_by(cultivo) %>% 
-  summarise(prod = sum(prod, na.rm = TRUE)) %>% 
-  ungroup() %>% 
-  arrange(desc(prod))
-
-
-
-
-#Idea con Tablas dinamicas Treemaps
-library(plotly)
-
-plot_ly(
-  type = "treemap",
-  labels = santafe$cultivo,
-  parents = "", 
-  values = santafe$prod
-  )
-
-```
-
-```{r}
-# El uso de las tablas dinamicas requiere un procesamiento de los datos
-depto_cultivos <- deptos %>%
+deptos <- cultivos %>%
   filter(                  # Filtra las filas del dataset 'deptos'.
     prov == "SANTA FE",    # Mantiene solo las filas donde la provincia (prov) es "SANTA FE".
-    campana == "2019/20",  # Mantiene solo las filas donde la campaña (campana) es "2019/20".
-    !cultivo %in% c("Soja 1ra", "Soja 2da") # Mantiene solo las filas donde el cultivo NO está en el vector (es decir, excluye "Soja 1ra" y "Soja 2da").
+    campaña == "2019/20",  # Mantiene solo las filas donde la campaña (campana) es "2019/20".
+    !cultivo %in% c("Soja 1ra", "Soja 2da") # Mantiene solo las filas donde el cultivo NO está en el vector
   ) %>%
-  group_by(depto, cultivo) %>% # Agrupa los datos por 'depto' (departamento) y 'cultivo'.
+  group_by(dpto, cultivo) %>% # Agrupa los datos por 'depto' (departamento) y 'cultivo'.
   summarise(               # Calcula valores resumen por cada grupo creado.
     prod = sum(prod, na.rm = TRUE), # Calcula la suma de la columna 'prod' (producción) para cada grupo, ignorando NAs.
     .groups = "drop"       # Indica que se debe eliminar la agrupación después de calcular el resumen.
@@ -245,25 +243,25 @@ depto_cultivos <- deptos %>%
 
 #---------------------------------------------------------------------------------------------------
 
-deptos_tot <- deptos_cultivos %>% 
+deptos_tot <- deptos %>% 
   #Calculo totales por depto
-  group_by(depto) %>%          # Agrupa los datos ÚNICAMENTE por 'depto' (departamento).
+  group_by(dpto) %>%          # Agrupa los datos ÚNICAMENTE por 'depto' (departamento).
   summarise(prod = sum(prod, na.rm = TRUE)) %>% # Calcula la suma de 'prod' (producción) por cada departamento.
   ungroup() %>%                # Elimina la agrupación para que las siguientes operaciones afecten a todo el dataset.
-  rename(cultivo = depto) %>%  # Renombra la columna 'depto' a 'cultivo' (es una preparación para el siguiente paso, donde 'cultivo' representará el total del departamento).
-  mutate(depto = "Total Santa Fe") # Crea/modifica la columna 'depto' y asigna el valor fijo "Total Santa Fe" a todas las filas (esto convierte cada fila en el total de un depto bajo una nueva categoría de "Total Santa Fe").
+  rename(cultivo = dpto) %>%  # Renombra la columna 'depto' a 'cultivo' (es una preparación para el siguiente paso, donde 'cultivo' representará el total del departamento).
+  mutate(dpto = "Total Santa Fe") # Crea/modifica la columna 'depto' y asigna el valor fijo "Total Santa Fe" a todas las filas (esto convierte cada fila en el total de un depto bajo una nueva categoría de "Total Santa Fe").
 
 #---------------------------------------------------------------------------------------------------
 
 #Uno con el dataset original
-deptos_tot <- bind_rows(deptos_cultivos, deptos_tot) # Combina (apila) las filas del dataset original 'deptos_cultivos' con el de totales 'deptos_tot'.
+deptos_tot <- bind_rows(deptos, deptos_tot) # Combina (apila) las filas del dataset original 'deptos_cultivos' con el de totales 'deptos_tot'.
 
 #---------------------------------------------------------------------------------------------------
 
 #Genero etiquetas únicas
 deptos_tot <- deptos_tot %>% # Continúa usando el dataset combinado.
-  mutate(etiq = ifelse(depto != "Total Santa Fe", # Crea/modifica la columna 'etiq' (etiqueta).
-                       paste0(cultivo, "-", depto), # Si 'depto' NO es "Total Santa Fe", la etiqueta es "cultivo-depto" (ej: Maiz-Rosario).
+  mutate(etiq = ifelse(dpto != "Total Santa Fe", # Crea/modifica la columna 'etiq' (etiqueta).
+                       paste0(cultivo, "-", dpto), # Si 'depto' NO es "Total Santa Fe", la etiqueta es "cultivo-depto" (ej: Maiz-Rosario).
                        cultivo)) # Si 'depto' ES "Total Santa Fe", la etiqueta es solo el 'cultivo' (que en este caso es el total del departamento renombrado previamente).
 
 #---------------------------------------------------------------------------------------------------
@@ -273,21 +271,84 @@ deptos_tot <- deptos_tot %>% # Continúa usando el dataset combinado.
 plot_ly(deptos_tot, 
         type = 'treemap',        # Especifica el tipo de gráfico como 'treemap'.
         labels = ~etiq,          # Usa la columna 'etiq' (etiqueta única) para las etiquetas de los rectángulos (jerarquía menor).
-        parents = ~deptos_tot$depto, # Usa la columna 'depto' para la jerarquía superior/padre de los rectángulos.
+        parents = ~deptos_tot$dpto, # Usa la columna 'depto' para la jerarquía superior/padre de los rectángulos.
         values = ~deptos_tot$prod,   # Usa la columna 'prod' (producción) para el tamaño de cada rectángulo.
         hoverinfo = "text",      # Muestra la información de 'text' al pasar el ratón.
-        textinfo = "label+value+percent parent+percent root", # Muestra en el gráfico la etiqueta, valor, porcentaje respecto al padre y porcentaje respecto al total.
+        textinfo = "label+value+percent parent+percent root") |>  # Muestra en el gráfico la etiqueta, valor, porcentaje respecto al padre y porcentaje respecto al total.
         add_trace(branchvalues = "total", name = "") # Ajusta cómo se calculan los nodos del treemap y añade la traza al gráfico.
-)
 ```
+
 ```{r}
-library(highcharter)
-library(quantmod)
+#Posible interrogante para agregar al treemap
+# Ver proporcion de individuos q usan distintos navegadores 
+# Ver su relacion con los gastos o con los gastos de estados unidos
 
-amazon <- getSymbols("AMZN", auto.assign = FALSE)
+# grafico de barras para los dispositivos dentro de la base de estados unidos
+cookies %>% 
+  count(dispositivo, sort = TRUE)
 
-hchart(amazon, type = "ohlc") %>% 
-  hc_title(text = "Serie temporal: datos OHLC para Amazon") %>%  
-  hc_add_theme(hc_theme_bloom())
+# grafico de barras para los navegadores dentro de la base de estados unidos
+
+cookies %>% 
+  count(browser, sort = TRUE)
 ```
 
+```{r}
+#opcion 1
+cookies_us <- cookies %>%
+  filter(pais == "United States") %>%
+  group_by(browser, dispositivo) %>%
+  summarise(tiempo_total = sum(tiempo, na.rm = TRUE), .groups = "drop")
+
+cookies_us_tot <- cookies %>%
+  filter(pais == "United States") %>%
+  group_by(browser) %>%
+  summarise(tiempo_total = sum(tiempo, na.rm = TRUE), .groups = "drop") %>%
+  mutate(dispositivo = "Total navegador")  # para identificar la fila total
+
+cookies_treemap <- bind_rows(cookies_us, cookies_us_tot)
+
+cookies_treemap <- cookies_treemap %>%
+  mutate(etiqueta = ifelse(dispositivo == "Total navegador",
+                           browser,
+                           paste0(dispositivo, "-", browser)))
+
+plot_ly(
+  data = cookies_treemap,
+  type = "treemap",
+  labels = ~etiqueta,
+  parents = ~ifelse(dispositivo == "Total navegador", "", browser),
+  values = ~tiempo_total,
+  textinfo = "label+value+percent parent+percent root",
+  hoverinfo = "label+value+percent parent") |> 
+  add_trace(branchvalues = "total", name = "")
+```
+
+```{r}
+# opcion 2
+cookies_us <- cookies %>%
+  group_by(browser, dispositivo) %>%
+  summarise(tiempo_total = sum(tiempo, na.rm = TRUE), .groups = "drop")
+
+cookies_us_tot <- cookies %>%
+  group_by(browser) %>%
+  summarise(tiempo_total = sum(tiempo, na.rm = TRUE), .groups = "drop") %>%
+  mutate(dispositivo = "Total navegador")  # para identificar la fila total
+
+cookies_treemap <- bind_rows(cookies_us, cookies_us_tot)
+
+cookies_treemap <- cookies_treemap %>%
+  mutate(etiqueta = ifelse(dispositivo == "Total navegador",
+                           browser,
+                           paste0(dispositivo, "-", browser)))
+
+plot_ly(
+  data = cookies_treemap,
+  type = "treemap",
+  labels = ~etiqueta,
+  parents = ~ifelse(dispositivo == "Total navegador", "", browser),
+  values = ~tiempo_total,
+  textinfo = "label+value+percent parent+percent root",
+  hoverinfo = "label+value+percent parent") |> 
+  add_trace(branchvalues = "total", name = "")
+```
