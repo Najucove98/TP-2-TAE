@@ -22,6 +22,7 @@ lightbox: true
 ```{r}
 # Librerias usadas
 library(tidyverse) #Solo poner las librerias que usemos
+library(readxl)
 
 # Carga de los datos
 cookies <- read.delim("cookies.txt")
@@ -61,46 +62,64 @@ analizados mediante gr´aficos y tablas.
 ##Objetivo 1 (grafico de geolocalizacion)
 
 ```{r}
-cookies %>% 
-  count(pais, sort = TRUE)  # cuenta y ordena de mayor a menor
-```
+library(leaflet.extras) #para crear el mapa de calor
+
+library(countrycode) #para codificar los paises
+
+# Para obtener los poligonos de cada pais
+library(rnaturalearth)
+library(sf)
+
+datos_poligono <- datos_validos %>%
+  filter(!is.na(country)) %>%
+  group_by(country, pais) %>%
+  summarise(Total_Visitas = n())
 
 
 
+limites_mundiales <- ne_countries(scale = "medium", returnclass = "sf") %>%
+  select(iso_a2, geometry)
+
+# 1. Unir los datos agregados con los límites geográficos
+#    La unión se realiza por el código ISO de 2 letras (iso_a2 en el mapa, country en tus datos)
+mapa_datos <- limites_mundiales %>%
+  left_join(datos_poligono, by = c("iso_a2" = "country")) %>%
+  # Filtrar para dejar solo los países que tienen visitas (Total_Visitas > 0 o no NA)
+  filter(!is.na(Total_Visitas))
+
+# 2. Definir la paleta de colores (más visitas = rojo más oscuro)
+paleta_colores <- colorNumeric(
+  palette = "YlOrRd", # paletas usadas Blues, Reds, viridis, magma, YlOrRd
+  domain = mapa_datos$Total_Visitas,
+  n = 7
+)
 
 
-
-```{r}
-#Posible interrogante
-# Ver la evolucion de la cantidad de compras a lo largo de los meses
-# Ver la evoluxion de compras en dias especiales
-# ver la evolucion de compras a lo largo del mes
-
-datos_gastos <- filter(cookies, gasto > 0)
-
-datos_gastos %>% 
-  count(pais, sort = TRUE)
-
-# 5277 observaciones del total hicieron compras 
-#dim(datos_gastos)
-filtrado <- gapminder %>% 
-  mutate(pobl = pop / 1000000) %>% # Crea la columna 'pobl'
-  filter(
-    country %in% c("Argentina", "Brazil", "Colombia", "Ecuador", "Chile",
-                   "Paraguay", "Bolivia", "Peru", "Uruguay", "Venezuela")
+# 3. Generar el Mapa Coroplético
+mapa_datos %>%
+  leaflet() %>%
+  addProviderTiles('OpenStreetMap') %>% # addProviderTiles("NASAGIBS.ViirsEarthAtNight2012")
+  addPolygons(
+    fillColor = ~paleta_colores(Total_Visitas), # Colorea según la variable Total_Visitas
+    weight = 1, # Grosor de las fronteras
+    opacity = 1,
+    color = "grey", # Color de las fronteras
+    dashArray = "3",
+    fillOpacity = 0.8, # Transparencia del color
+    # Agrega un PopUp para mostrar el total de visitas al hacer clic
+    popup = ~paste0("País: ", pais, "<br>Total Visitas: ", Total_Visitas)
+  ) %>%
+  # Agregar la leyenda para interpretar los colores
+  addLegend(
+    pal = paleta_colores,
+    values = ~Total_Visitas,
+    opacity = 0.7,
+    title = "Total de Visitas",
+    position = "bottomright"
   )
-
-
-datos_filtrados <- cookies |> 
-  filter(
-    pais %in% c("United States", "Canada", "Japan", "Taiwan", "Venezuela", "Mexico", "Australia", "Brazil", "Singapore")
-  ) |> 
-  group_by(pais) |> 
-  summarise(count = sum(gasto > 0))
-
-
-
 ```
+
+
 ```{r}
 datos_agrupados <- cookies %>%
   mutate(grupo = ifelse(pais == "United States", "Estados Unidos", "Otros"))
@@ -128,14 +147,19 @@ ggplot(gasto_por_grupo, aes(x = grupo, y = gasto_total, fill = grupo)) +
 
 cookies_eeuu <- filter(cookies, pais == "United States")
 
-summary(cookies_eeuu)
+summary(cookies)
 
-nrow(cookies_eeuu)
 ```
 
 ## Objetivo 2 (linea de tiempo sobre el gasto de estados unidos vs otros)
 
 ```{r}
+library(echarts4r)
+#Posible interrogante
+# Ver la evolucion de la cantidad de compras a lo largo de los meses
+# Ver la evoluxion de compras en dias especiales
+# ver la evolucion de compras a lo largo del mes
+
 cookies_fecha <- datos_agrupados |>  
   mutate(fecha = as.Date(as.character(fecha), format = "%Y%m%d"))
 
@@ -162,67 +186,168 @@ Conclusion
 
 # Objetivo 3
 
+idea general visualizar por usuario
+
 ```{r}
+library(plotly)
 usuarios <- cookies |>
+  filter(ID != 1957458976293878016, pais == "United States") |> 
   group_by(ID) |> 
   summarise(paginas = sum(paginas, na.rm = TRUE),
             clicks = sum(clicks, na.rm = TRUE),
             tiempo = (sum(tiempo, na.rm = TRUE)/60),
             gasto = sum(gasto, na.rm = T),
-            entradas = n()) |> 
-  filter(gasto > 0)
+            visitas = n()) |> 
+  filter(gasto > 0) |> 
+  arrange(desc(gasto))
 
-grafico <- ggplot(data = usuarios) +
-  aes(x = paginas, y = gasto) +
+grafico <- ggplot(data = usuarios[1:100, ]) +
+  aes(x = visitas, y = tiempo) +
   geom_point()
 
 ggplotly(grafico)
 
 ```
 
-
-Interrogante: ¿Los usuarios que tienen mas paginas/clicks/tiempo accedidas tienden a realizar gastos mas grandes?
-
 ```{r}
-# Filtrar los datos para individuos con un tiempo de duracion de la visitia al sitio web > 1 (esto elimina valores con clicks = 1 y valores con paginas = 1)
-
-# Grafico de dispersion para ver si hay relacion entre las variables clicks y gasto
-# dentro de la base que si gastaron
-# comparar con la alternativa : graf de dispersion entre paginas y gasto
+usuarios_mas <- usuarios[1:100, ]
+plot_ly(
+  data = usuarios_mas, 
+  x = ~visitas, 
+  y = ~tiempo, 
+  z = ~gasto, 
+  type = "scatter3d", 
+  mode = "markers", 
+  size = I(150),
+  hoverinfo = "text",
+  hovertext = paste0(
+    "<b>Visitas total: </b>", usuarios_mas$visitas, "<br>",
+    "<b>Tiempo total: </b>", usuarios_mas$tiempo, "<br>",
+    "<b>Gasto total: </b>", usuarios_mas$gasto, "<br>",
+    "<b>Paginas total: </b>", usuarios_mas$paginas
+  )
+  ) %>% 
+  layout(
+    scene = list(
+      xaxis = list(title = "Visitas"),
+      yaxis = list(title = "tiempo"),
+      zaxis = list(title = "gasto")
+      )
+  )
+```
+```{r}
+usuarios_menos <- usuarios[4331:4430, ]
+plot_ly(
+  data = usuarios_menos, 
+  x = ~visitas, 
+  y = ~tiempo, 
+  z = ~gasto, 
+  type = "scatter3d", 
+  mode = "markers", 
+  size = I(150),
+  hoverinfo = "text",
+  hovertext = paste0(
+    "<b>Visitas total: </b>", usuarios_menos$visitas, "<br>",
+    "<b>Tiempo total: </b>", usuarios_menos$tiempo, "<br>",
+    "<b>Gasto total: </b>", usuarios_menos$gasto, "<br>",
+    "<b>Paginas total: </b>", usuarios_menos$paginas
+  )
+  ) %>% 
+  layout(
+    scene = list(
+      xaxis = list(title = "Visitas"),
+      yaxis = list(title = "tiempo"),
+      zaxis = list(title = "gasto")
+      )
+  )
+```
+```{r}
+usuarios_extremos <- rbind(usuarios_mas, usuarios_menos)
+plot_ly(
+  data = usuarios_extremos, 
+  x = ~visitas, 
+  y = ~tiempo, 
+  z = ~gasto, 
+  type = "scatter3d", 
+  mode = "markers", 
+  size = I(150),
+  hoverinfo = "text",
+  hovertext = paste0(
+    "<b>Visitas total: </b>", usuarios_extremos$visitas, "<br>",
+    "<b>Tiempo total: </b>", usuarios_extremos$tiempo, "<br>",
+    "<b>Gasto total: </b>", usuarios_extremos$gasto, "<br>",
+    "<b>Paginas total: </b>", usuarios_extremos$paginas
+  )
+  ) %>% 
+  layout(
+    scene = list(
+      xaxis = list(title = "Visitas"),
+      yaxis = list(title = "tiempo"),
+      zaxis = list(title = "gasto")
+      )
+  )
 ```
 
-# Objetivo 4 
-utilizar la variable dispositivo para ver relaciones con otras variables
-
-```{r}
-table(cookies$browser, cookies$dispositivo)
-```
-
-# Objetivo 5 
-```{r}
-usuarios |> 
-  count(entradas, sort = T)
-
-#Idea podemos agrupar por cantidad de entradas unicas y graficar el promedio de los totales
-```
+# Objetivo 5 alternativa del objetivo 3
 
 
-Los visitantes frecuentes muestran un gasto mayor o menor que los visitantes unicos (subgrupos de visitantes frecuentes, ¿ == 1 o > 1 ? ) ver como queda por promedio o total, grafico de barras
+Los visitantes frecuentes muestran un gasto mayor o menor que los visitantes unicos (subgrupos de visitantes frecuentes, ¿ == 1 o > 1 ? ) ver como queda por promedio, grafico de barras
 
 Ver la relacion entre un usuario mas frecuente gasta mas en la pagina (grafico de dispersion)
 
 ```{r}
-datos_gastos %>% 
-  count(ID, sort = TRUE)
+datos_gastos <- cookies |> 
+  filter(gasto > 0, ID != 1957458976293878016)
+  
 
 
 # Contar cuántas visitas hizo cada ID
 visitas_por_id <- datos_gastos %>%
   group_by(ID) %>%
-  summarise(n_visitas = n(),
+  summarise(n_visitas_efectivas = n(),
             gasto_total = sum(gasto),
-            gasto_promedio = mean(gasto))
+            tiempo_total = sum(tiempo),
+            clicks_total = sum(clicks),
+            paginas_total = sum(paginas))
+
+datos_visita_unica <- visitas_por_id |> 
+  filter(tiempo_total != "is.na") |> 
+  group_by(n_visitas_efectivas) |> 
+  summarise(gasto_promedio = mean(gasto_total),
+            tiempo_promedio = mean(tiempo_total),
+            clicks_promedio = mean(clicks_total),
+            paginas_promedio = mean(paginas_total))
+
 ```
+
+```{r}
+plot_ly(
+  data = datos_visita_unica, 
+  x = ~n_visitas_efectivas, 
+  y = ~tiempo_promedio, 
+  z = ~gasto_promedio, 
+  type = "scatter3d", 
+  mode = "markers", 
+  size = I(150),
+  hoverinfo = "text",
+  hovertext = paste0(
+    "<b>Visitas total: </b>", datos_visita_unica$n_visitas_efectivas, "<br>",
+    "<b>Tiempo total: </b>", datos_visita_unica$tiempo_promedio, "<br>",
+    "<b>Gasto total: </b>", datos_visita_unica$gasto_promedio, "<br>",
+    "<b>Paginas total: </b>", datos_visita_unica$paginas_promedio
+  )
+  ) %>% 
+  layout(
+    scene = list(
+      xaxis = list(title = "Visitas"),
+      yaxis = list(title = "tiempo"),
+      zaxis = list(title = "gasto")
+      )
+  )
+```
+
+
+
 
 ## Objetivo 3
 
