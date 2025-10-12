@@ -318,9 +318,6 @@ datos_visita_unica <- visitas_por_id |>
             clicks_promedio = mean(clicks_total),
             paginas_promedio = mean(paginas_total))
 
-```
-
-```{r}
 plot_ly(
   data = datos_visita_unica, 
   x = ~n_visitas_efectivas, 
@@ -331,10 +328,10 @@ plot_ly(
   size = I(150),
   hoverinfo = "text",
   hovertext = paste0(
-    "<b>Visitas total: </b>", datos_visita_unica$n_visitas_efectivas, "<br>",
-    "<b>Tiempo total: </b>", datos_visita_unica$tiempo_promedio, "<br>",
-    "<b>Gasto total: </b>", datos_visita_unica$gasto_promedio, "<br>",
-    "<b>Paginas total: </b>", datos_visita_unica$paginas_promedio
+    "<b>Visitas unicas: </b>", datos_visita_unica$n_visitas_efectivas, "<br>",
+    "<b>Tiempo promedio: </b>", datos_visita_unica$tiempo_promedio, "<br>",
+    "<b>Gasto promedio: </b>", datos_visita_unica$gasto_promedio, "<br>",
+    "<b>Paginas promedio: </b>", datos_visita_unica$paginas_promedio
   )
   ) %>% 
   layout(
