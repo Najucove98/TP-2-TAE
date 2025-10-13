@@ -70,11 +70,18 @@ library(countrycode) #para codificar los paises
 library(rnaturalearth)
 library(sf)
 
-datos_poligono <- datos_validos %>%
+cookies_paises <- cookies %>%
+  mutate(
+    country = countrycode(
+      sourcevar = pais,
+      origin = "country.name.en",
+      destination = "iso2c", # El código de destino es ISO de 2 letras
+      nomatch = NA_character_ # Si no encuentra el nombre, pone NA
+    )
+  ) %>%
   filter(!is.na(country)) %>%
   group_by(country, pais) %>%
   summarise(Total_Visitas = n())
-
 
 
 limites_mundiales <- ne_countries(scale = "medium", returnclass = "sf") %>%
@@ -83,7 +90,7 @@ limites_mundiales <- ne_countries(scale = "medium", returnclass = "sf") %>%
 # 1. Unir los datos agregados con los límites geográficos
 #    La unión se realiza por el código ISO de 2 letras (iso_a2 en el mapa, country en tus datos)
 mapa_datos <- limites_mundiales %>%
-  left_join(datos_poligono, by = c("iso_a2" = "country")) %>%
+  left_join(cookies_paises, by = c("iso_a2" = "country")) %>%
   # Filtrar para dejar solo los países que tienen visitas (Total_Visitas > 0 o no NA)
   filter(!is.na(Total_Visitas))
 
@@ -121,6 +128,7 @@ mapa_datos %>%
 
 
 ```{r}
+# Esta opcion la descartamos por el grafico de georeferencia
 datos_agrupados <- cookies %>%
   mutate(grupo = ifelse(pais == "United States", "Estados Unidos", "Otros"))
 
@@ -165,7 +173,8 @@ cookies_fecha <- datos_agrupados |>
 
 cookies_dispositivos_diarios <- cookies_fecha |> 
   group_by(fecha, grupo) |> 
-  summarise(gasto_dia = sum(gasto, na.rm = TRUE))
+  summarise(gasto_dia = sum(gasto, na.rm = TRUE),
+    .groups = "drop") #creo que es como el ungroup
 
 #una mejor visualizacion del grafico anterior
 cookies_dispositivos_diarios %>%
@@ -202,8 +211,13 @@ usuarios <- cookies |>
   arrange(desc(gasto))
 
 grafico <- ggplot(data = usuarios[1:100, ]) +
-  aes(x = visitas, y = tiempo) +
-  geom_point()
+  aes(x = visitas, 
+      y = gasto,
+      text = paste("Tiempo Total:", round(tiempo, 1), "<br>",
+                   "Páginas Total:", paginas, "<br>",
+                   "Clicks Total:", clicks)) +
+  geom_point() +
+  labs(title = "Relación Visitas vs. Tiempo por Usuario")
 
 ggplotly(grafico)
 
@@ -343,17 +357,35 @@ plot_ly(
   )
 ```
 
+```{r}
+grafico <- ggplot(data = datos_visita_unica) +
+  aes(x = n_visitas_efectivas, 
+      y = gasto_promedio,
+      text = paste0(
+    "<b>Visitas efectivas: </b>", n_visitas_efectivas, "<br>",
+    "<b>Gasto promedio: </b>", round(gasto_promedio, 2), " USD <br>",
+    "<b>Tiempo promedio: </b>", round(tiempo_promedio, 2), " min <br>",
+    "<b>Clicks promedio: </b>", round(clicks_promedio), "<br>",
+    "<b>Paginas promedio: </b>", round(paginas_promedio))) +
+  geom_point() +
+  labs(x = "Visitas efectivas",
+       y = "Gasto promedio",
+       title = "Relación Visitas efectivas vs. Gasto promedio")
+
+ggplotly(grafico, tooltip = "text")
+```
 
 
 
 ## Objetivo 3
 
 ```{r}
+#Esta parte del codigo es solo para ver como comentarlo no deberia correr
 # El uso de las tablas dinamicas requiere un procesamiento de los datos
 
 deptos <- cultivos %>%
-  filter(                  # Filtra las filas del dataset 'deptos'.
-    prov == "SANTA FE",    # Mantiene solo las filas donde la provincia (prov) es "SANTA FE".
+  filter(# Filtra las filas del dataset 'deptos'.
+    prov == "SANTA FE", # Mantiene solo las filas donde la provincia (prov) es "SANTA FE".
     campaña == "2019/20",  # Mantiene solo las filas donde la campaña (campana) es "2019/20".
     !cultivo %in% c("Soja 1ra", "Soja 2da") # Mantiene solo las filas donde el cultivo NO está en el vector
   ) %>%
