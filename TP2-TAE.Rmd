@@ -21,55 +21,42 @@ lightbox: true
 
 ```{r}
 # Librerias usadas
-library(tidyverse) #Solo poner las librerias que usemos
-library(readxl)
+#library(tidyverse) #Solo poner las librerias que usemos
+library(dplyr) #manipulacion de datos
+library(ggplot2) #graficar
+#library(readxl) #leectura de archivos
+library(lubridate) #manipulacion de datos
+library(echarts4r) #grafico linea temporal
+library(leaflet.extras) #para crear el mapa de calor
+library(countrycode) #para codificar los paises
+library(rnaturalearth) # Para obtener los poligonos de cada pais
+#library(sf) no usamos
 
 # Carga de los datos
 cookies <- read.delim("cookies.txt")
 
 # Exploración de los datos
-summary(cookies)
+# summary(cookies)
 ```
 # Introducción
 
+Este informe presenta un análisis descriptivo de la base de datos de un sitio web de compras online, con el objetivo de encontrar distintas relaciones entre las variables provistas.
 
-Datos: Google Analytics
-Los datos a analizar consisten en registros de Google Analytics, herramienta utilizada para hacer
-un seguimiento del comportamiento de los usuarios en un sitio web. En particular, esta base
-contiene informaci´on sobre visitas al sitio de compras online https://shop.merch.google/
-durante el primer semestre del a˜no 2017. La base se encuentra almacenada en el archivo
-cookies.txt y contiene las siguientes variables.
- ID: n´umero que identifica a cada visitante del sitio web.
- fecha: fecha de la visita al sitio web.
- clicks: cantidad de clicks realizados durante la visita al sitio web.
- paginas: cantidad de p´aginas accedidas durante la visita al sitio web.
- tiempo: duraci´on de la visita al sitio web, en segundos.
- gasto: valor monetario de las compras realizadas durante la visita al sitio web, en d´olares.
- browser: tipo de navegador desde el que accedi´o al sitio web.
- dispositivo: tipo de dispositivo desde el que accedi´o al sitio web.
- pais: pa´ıs de residencia del visitante del sitio web.
+La base de datos original contiene variables clave como:
 
-Consigna
-El objetivo de este TP es poner en pr´actica habilidades para la confecci´on de reportes orientados
-al an´alisis exploratorio de datos, en particular, mediante las herramientas R Markdown o
-Quarto. El reporte debe ser entregado en formato .html o .pdf, junto con el script de
-codigo .Rmd o .qmd utilizado. Cada informe deber´a plantear 4 interrogantes, los cuales ser´an
-analizados mediante gr´aficos y tablas. 
+- ID: número que identifica a cada visitante del sitio web.
+- fecha: fecha de la visita al sitio web.
+- clicks: cantidad de clicks realizados durante la visita al sitio web.
+- paginas: cantidad de páginas accedidas durante la visita al sitio web.
+- tiempo: duración de la visita al sitio web, en segundos.
+- gasto: valor monetario de las compras realizadas durante la visita al sitio web, en dólares.
+- browser: tipo de navegador desde el que accedió al sitio web.
+- dispositivo: tipo de dispositivo desde el que accedió al sitio web.
+- pais: país de residencia del visitante del sitio web.
 
-
-
-
-##Objetivo 1 (grafico de geolocalizacion)
+## ¿La distribución geográfica de las visitas refleja una concentración considerablemente marcada en determinado país?
 
 ```{r}
-library(leaflet.extras) #para crear el mapa de calor
-
-library(countrycode) #para codificar los paises
-
-# Para obtener los poligonos de cada pais
-library(rnaturalearth)
-library(sf)
-
 cookies_paises <- cookies %>%
   mutate(
     country = countrycode(
@@ -81,7 +68,8 @@ cookies_paises <- cookies %>%
   ) %>%
   filter(!is.na(country)) %>%
   group_by(country, pais) %>%
-  summarise(Total_Visitas = n())
+  summarise(Total_Visitas = n(),
+            Total_Usuarios = n_distinct(ID))
 
 
 limites_mundiales <- ne_countries(scale = "medium", returnclass = "sf") %>%
@@ -97,15 +85,13 @@ mapa_datos <- limites_mundiales %>%
 # 2. Definir la paleta de colores (más visitas = rojo más oscuro)
 paleta_colores <- colorNumeric(
   palette = "YlOrRd", # paletas usadas Blues, Reds, viridis, magma, YlOrRd
-  domain = mapa_datos$Total_Visitas,
-  n = 7
-)
+  domain = mapa_datos$Total_Visitas)
 
 
 # 3. Generar el Mapa Coroplético
 mapa_datos %>%
   leaflet() %>%
-  addProviderTiles('OpenStreetMap') %>% # addProviderTiles("NASAGIBS.ViirsEarthAtNight2012")
+  addProviderTiles('OpenStreetMap.Mapnik') %>% # addProviderTiles("NASAGIBS.ViirsEarthAtNight2012")
   addPolygons(
     fillColor = ~paleta_colores(Total_Visitas), # Colorea según la variable Total_Visitas
     weight = 1, # Grosor de las fronteras
@@ -114,7 +100,9 @@ mapa_datos %>%
     dashArray = "3",
     fillOpacity = 0.8, # Transparencia del color
     # Agrega un PopUp para mostrar el total de visitas al hacer clic
-    popup = ~paste0("País: ", pais, "<br>Total Visitas: ", Total_Visitas)
+    popup = ~paste0("País: ", pais, 
+                    "<br>Total Visitas: ", Total_Visitas, 
+                    "<br>Total Usuarios: ", Total_Usuarios)
   ) %>%
   # Agregar la leyenda para interpretar los colores
   addLegend(
@@ -126,383 +114,121 @@ mapa_datos %>%
   )
 ```
 
+El mapa muestra la distribución geográfica del total de visitas al sitio web durante el período analizado. Se observa una marcada concentración en Estados Unidos, país que registra un volumen de accesos significativamente superior al resto del mundo, lo cual podria ocasinar una fuerte dependencia comercial con el mercado estadounidense. 
+
+Debido a esto, podría recomendarse una expasión a nivel internacional de la página web
+para que de esta manera se amplie la base de clientes potenciales.
+
+## ¿Cómo evolucionó la cantidad de compras a lo largo de las semanas analizadas?
 
 ```{r}
-# Esta opcion la descartamos por el grafico de georeferencia
-datos_agrupados <- cookies %>%
-  mutate(grupo = ifelse(pais == "United States", "Estados Unidos", "Otros"))
-
-gasto_por_grupo <- datos_agrupados |> 
-  mutate(gasto_miles = gasto/1000) |> 
-  group_by(grupo) %>%
-  summarise(gasto_total = sum(gasto_miles, na.rm = TRUE),
-            gasto_promedio = mean(gasto_miles, na.rm = TRUE),
-            n_visitas = n()) %>%
-  arrange(desc(gasto_total))
-
-ggplot(gasto_por_grupo, aes(x = grupo, y = gasto_total, fill = grupo)) +
-  geom_bar(stat = "identity") +
-  labs(title = "Gasto total: Estados Unidos vs. Otros países",
-       x = "", y = "Gasto total (USD x miles)") +
-  theme_minimal() +
-  theme(legend.position = "none")
-```
-
-
-
-```{r} 
-# Datos de estados unidos
-
-cookies_eeuu <- filter(cookies, pais == "United States")
-
-summary(cookies)
-
-```
-
-## Objetivo 2 (linea de tiempo sobre el gasto de estados unidos vs otros)
-
-```{r}
-library(echarts4r)
-#Posible interrogante
-# Ver la evolucion de la cantidad de compras a lo largo de los meses
-# Ver la evoluxion de compras en dias especiales
-# ver la evolucion de compras a lo largo del mes
-
-cookies_fecha <- datos_agrupados |>  
-  mutate(fecha = as.Date(as.character(fecha), format = "%Y%m%d"))
-
-cookies_dispositivos_diarios <- cookies_fecha |> 
-  group_by(fecha, grupo) |> 
-  summarise(gasto_dia = sum(gasto, na.rm = TRUE),
-    .groups = "drop") #creo que es como el ungroup
+datos_tiempo <- cookies  |> 
+  mutate(grupo = ifelse(pais == "United States", "Estados Unidos", "Otros"),
+         fecha = ymd(as.character(fecha)),
+         semana = floor_date(fecha, unit = "week")) |> 
+  group_by(semana, grupo) |> # si agrupamos por fecha o semana se grafica la linea de tiempo diario o semanal respectivamente
+  summarise(gasto_dia = sum(gasto, na.rm = TRUE), .groups = "drop")
 
 #una mejor visualizacion del grafico anterior
-cookies_dispositivos_diarios %>%
+datos_tiempo %>%
   group_by(grupo) %>% # Agrupa los datos por 'country' (país).
-  e_charts(x = fecha) %>% # mapeando 'year' al eje X.
+  e_charts(x = semana) %>% # mapeando 'year' al eje X.
   e_line(serie = gasto_dia) %>% # usa 'pobl' como los valores de la serie (eje Y).
-  e_title("Evolución de la población de los países sudamericanos") %>% # Define el título del gráfico interactivo.
-  e_x_axis(name = "Dia", serie = fecha) %>% # Define el nombre del eje X y usa la columna 'year' como datos.
+  e_title("Evolución semanal del gasto total ") %>% # Define el título del gráfico interactivo.
+  e_x_axis(name = "Semana", serie = semana) %>% # Define el nombre del eje X y usa la columna 'year' como datos.
   e_y_axis(name = "Gasto (en USD)") %>% # Define el nombre del eje y.
   e_legend(orient = "vertical", left = "10%", top = "10%") %>% # Personaliza la leyenda: orientación vertical, posicionada al 10% desde la izquierda y 10% desde arriba.
   e_tooltip(trigger = "axis") # Configura las tooltips (información emergente al pasar el ratón) para que se muestre al pasar sobre el eje X.
 
 ```
 
-Conclusion
+El gráfico muestra la evolución semanal del gasto total en el sitio web, diferenciando a Estados Unidos del resto de los paises. 
+Se puede observar que el gasto realizado en Estados unidos es ampliamente superior en el periodo de tiempo analizado, ademas de  presentar picos muchos mas marcados en la temporada Abril-Mayo.
 
+El gasto de los demás paises es plano con respecto a Estados Unidos.Esto reafirma lo mencionado en el gráfico anterior, que la actividad económica del sitio se encuentra reducida a este país particular. Los picos se encuentran distribuidos uniformemente a lo largo de los meses. 
 
-
-# Objetivo 3
-
-idea general visualizar por usuario
-
-```{r}
-library(plotly)
-usuarios <- cookies |>
-  filter(ID != 1957458976293878016, pais == "United States") |> 
-  group_by(ID) |> 
-  summarise(paginas = sum(paginas, na.rm = TRUE),
-            clicks = sum(clicks, na.rm = TRUE),
-            tiempo = (sum(tiempo, na.rm = TRUE)/60),
-            gasto = sum(gasto, na.rm = T),
-            visitas = n()) |> 
-  filter(gasto > 0) |> 
-  arrange(desc(gasto))
-
-grafico <- ggplot(data = usuarios[1:100, ]) +
-  aes(x = visitas, 
-      y = gasto,
-      text = paste("Tiempo Total:", round(tiempo, 1), "<br>",
-                   "Páginas Total:", paginas, "<br>",
-                   "Clicks Total:", clicks)) +
-  geom_point() +
-  labs(title = "Relación Visitas vs. Tiempo por Usuario")
-
-ggplotly(grafico)
-
-```
+## ¿La cantidad de visitas donde se efectuo una compra esta relacionado con el gasto promedio por usuario?
 
 ```{r}
-usuarios_mas <- usuarios[1:100, ]
-plot_ly(
-  data = usuarios_mas, 
-  x = ~visitas, 
-  y = ~tiempo, 
-  z = ~gasto, 
-  type = "scatter3d", 
-  mode = "markers", 
-  size = I(150),
-  hoverinfo = "text",
-  hovertext = paste0(
-    "<b>Visitas total: </b>", usuarios_mas$visitas, "<br>",
-    "<b>Tiempo total: </b>", usuarios_mas$tiempo, "<br>",
-    "<b>Gasto total: </b>", usuarios_mas$gasto, "<br>",
-    "<b>Paginas total: </b>", usuarios_mas$paginas
-  )
-  ) %>% 
-  layout(
-    scene = list(
-      xaxis = list(title = "Visitas"),
-      yaxis = list(title = "tiempo"),
-      zaxis = list(title = "gasto")
-      )
-  )
-```
-```{r}
-usuarios_menos <- usuarios[4331:4430, ]
-plot_ly(
-  data = usuarios_menos, 
-  x = ~visitas, 
-  y = ~tiempo, 
-  z = ~gasto, 
-  type = "scatter3d", 
-  mode = "markers", 
-  size = I(150),
-  hoverinfo = "text",
-  hovertext = paste0(
-    "<b>Visitas total: </b>", usuarios_menos$visitas, "<br>",
-    "<b>Tiempo total: </b>", usuarios_menos$tiempo, "<br>",
-    "<b>Gasto total: </b>", usuarios_menos$gasto, "<br>",
-    "<b>Paginas total: </b>", usuarios_menos$paginas
-  )
-  ) %>% 
-  layout(
-    scene = list(
-      xaxis = list(title = "Visitas"),
-      yaxis = list(title = "tiempo"),
-      zaxis = list(title = "gasto")
-      )
-  )
-```
-```{r}
-usuarios_extremos <- rbind(usuarios_mas, usuarios_menos)
-plot_ly(
-  data = usuarios_extremos, 
-  x = ~visitas, 
-  y = ~tiempo, 
-  z = ~gasto, 
-  type = "scatter3d", 
-  mode = "markers", 
-  size = I(150),
-  hoverinfo = "text",
-  hovertext = paste0(
-    "<b>Visitas total: </b>", usuarios_extremos$visitas, "<br>",
-    "<b>Tiempo total: </b>", usuarios_extremos$tiempo, "<br>",
-    "<b>Gasto total: </b>", usuarios_extremos$gasto, "<br>",
-    "<b>Paginas total: </b>", usuarios_extremos$paginas
-  )
-  ) %>% 
-  layout(
-    scene = list(
-      xaxis = list(title = "Visitas"),
-      yaxis = list(title = "tiempo"),
-      zaxis = list(title = "gasto")
-      )
-  )
-```
-
-# Objetivo 5 alternativa del objetivo 3
-
-
-Los visitantes frecuentes muestran un gasto mayor o menor que los visitantes unicos (subgrupos de visitantes frecuentes, ¿ == 1 o > 1 ? ) ver como queda por promedio, grafico de barras
-
-Ver la relacion entre un usuario mas frecuente gasta mas en la pagina (grafico de dispersion)
-
-```{r}
-datos_gastos <- cookies |> 
-  filter(gasto > 0, ID != 1957458976293878016)
-  
-
-
+library(plotly) 
 # Contar cuántas visitas hizo cada ID
-visitas_por_id <- datos_gastos %>%
+visitas_por_id <- cookies |> 
+  filter(gasto > 0) %>%
   group_by(ID) %>%
   summarise(n_visitas_efectivas = n(),
-            gasto_total = sum(gasto),
-            tiempo_total = sum(tiempo),
-            clicks_total = sum(clicks),
-            paginas_total = sum(paginas))
+            gasto = mean(gasto),
+            tiempo = mean(tiempo),
+            clicks = mean(clicks),
+            paginas = mean(paginas))
 
-datos_visita_unica <- visitas_por_id |> 
-  filter(tiempo_total != "is.na") |> 
-  group_by(n_visitas_efectivas) |> 
-  summarise(gasto_promedio = mean(gasto_total),
-            tiempo_promedio = mean(tiempo_total),
-            clicks_promedio = mean(clicks_total),
-            paginas_promedio = mean(paginas_total))
-
-plot_ly(
-  data = datos_visita_unica, 
-  x = ~n_visitas_efectivas, 
-  y = ~tiempo_promedio, 
-  z = ~gasto_promedio, 
-  type = "scatter3d", 
-  mode = "markers", 
-  size = I(150),
-  hoverinfo = "text",
-  hovertext = paste0(
-    "<b>Visitas unicas: </b>", datos_visita_unica$n_visitas_efectivas, "<br>",
-    "<b>Tiempo promedio: </b>", datos_visita_unica$tiempo_promedio, "<br>",
-    "<b>Gasto promedio: </b>", datos_visita_unica$gasto_promedio, "<br>",
-    "<b>Paginas promedio: </b>", datos_visita_unica$paginas_promedio
-  )
-  ) %>% 
-  layout(
-    scene = list(
-      xaxis = list(title = "Visitas"),
-      yaxis = list(title = "tiempo"),
-      zaxis = list(title = "gasto")
-      )
-  )
-```
-
-```{r}
-grafico <- ggplot(data = datos_visita_unica) +
+grafico <- ggplot(data = visitas_por_id) +
   aes(x = n_visitas_efectivas, 
-      y = gasto_promedio,
+      y = gasto,
       text = paste0(
     "<b>Visitas efectivas: </b>", n_visitas_efectivas, "<br>",
-    "<b>Gasto promedio: </b>", round(gasto_promedio, 2), " USD <br>",
-    "<b>Tiempo promedio: </b>", round(tiempo_promedio, 2), " min <br>",
-    "<b>Clicks promedio: </b>", round(clicks_promedio), "<br>",
-    "<b>Paginas promedio: </b>", round(paginas_promedio))) +
+    "<b>Gasto promedio: </b>", round(gasto, 2), " USD <br>",
+    "<b>Tiempo promedio: </b>", round(tiempo, 2), " min <br>",
+    "<b>Clicks promedio: </b>", round(clicks), "<br>",
+    "<b>Paginas promedio: </b>", round(paginas))) +
   geom_point() +
   labs(x = "Visitas efectivas",
        y = "Gasto promedio",
-       title = "Relación Visitas efectivas vs. Gasto promedio")
+       title = "Relación Visitas efectivas vs. Gasto promedio") +
+  
+  theme_bw()
 
 ggplotly(grafico, tooltip = "text")
 ```
 
-
-
-## Objetivo 3
+El grafico describe la relacion entre el numero de visitas efectivas y el gasto promedio por usuario donde se observa dos valores atipicos. Por lo cual procedemos a visualizar la mayor concentracion de usuarios.
 
 ```{r}
-#Esta parte del codigo es solo para ver como comentarlo no deberia correr
-# El uso de las tablas dinamicas requiere un procesamiento de los datos
-
-deptos <- cultivos %>%
-  filter(# Filtra las filas del dataset 'deptos'.
-    prov == "SANTA FE", # Mantiene solo las filas donde la provincia (prov) es "SANTA FE".
-    campaña == "2019/20",  # Mantiene solo las filas donde la campaña (campana) es "2019/20".
-    !cultivo %in% c("Soja 1ra", "Soja 2da") # Mantiene solo las filas donde el cultivo NO está en el vector
-  ) %>%
-  group_by(dpto, cultivo) %>% # Agrupa los datos por 'depto' (departamento) y 'cultivo'.
-  summarise(               # Calcula valores resumen por cada grupo creado.
-    prod = sum(prod, na.rm = TRUE), # Calcula la suma de la columna 'prod' (producción) para cada grupo, ignorando NAs.
-    .groups = "drop"       # Indica que se debe eliminar la agrupación después de calcular el resumen.
-  )
-
-#---------------------------------------------------------------------------------------------------
-
-deptos_tot <- deptos %>% 
-  #Calculo totales por depto
-  group_by(dpto) %>%          # Agrupa los datos ÚNICAMENTE por 'depto' (departamento).
-  summarise(prod = sum(prod, na.rm = TRUE)) %>% # Calcula la suma de 'prod' (producción) por cada departamento.
-  ungroup() %>%                # Elimina la agrupación para que las siguientes operaciones afecten a todo el dataset.
-  rename(cultivo = dpto) %>%  # Renombra la columna 'depto' a 'cultivo' (es una preparación para el siguiente paso, donde 'cultivo' representará el total del departamento).
-  mutate(dpto = "Total Santa Fe") # Crea/modifica la columna 'depto' y asigna el valor fijo "Total Santa Fe" a todas las filas (esto convierte cada fila en el total de un depto bajo una nueva categoría de "Total Santa Fe").
-
-#---------------------------------------------------------------------------------------------------
-
-#Uno con el dataset original
-deptos_tot <- bind_rows(deptos, deptos_tot) # Combina (apila) las filas del dataset original 'deptos_cultivos' con el de totales 'deptos_tot'.
-
-#---------------------------------------------------------------------------------------------------
-
-#Genero etiquetas únicas
-deptos_tot <- deptos_tot %>% # Continúa usando el dataset combinado.
-  mutate(etiq = ifelse(dpto != "Total Santa Fe", # Crea/modifica la columna 'etiq' (etiqueta).
-                       paste0(cultivo, "-", dpto), # Si 'depto' NO es "Total Santa Fe", la etiqueta es "cultivo-depto" (ej: Maiz-Rosario).
-                       cultivo)) # Si 'depto' ES "Total Santa Fe", la etiqueta es solo el 'cultivo' (que en este caso es el total del departamento renombrado previamente).
-
-#---------------------------------------------------------------------------------------------------
-
-#Idea con Tablas dinamicas Treemaps
-# Inicia la creación de un gráfico interactivo con plotly, utilizando el dataset 'deptos_tot'.
-plot_ly(deptos_tot, 
-        type = 'treemap',        # Especifica el tipo de gráfico como 'treemap'.
-        labels = ~etiq,          # Usa la columna 'etiq' (etiqueta única) para las etiquetas de los rectángulos (jerarquía menor).
-        parents = ~deptos_tot$dpto, # Usa la columna 'depto' para la jerarquía superior/padre de los rectángulos.
-        values = ~deptos_tot$prod,   # Usa la columna 'prod' (producción) para el tamaño de cada rectángulo.
-        hoverinfo = "text",      # Muestra la información de 'text' al pasar el ratón.
-        textinfo = "label+value+percent parent+percent root") |>  # Muestra en el gráfico la etiqueta, valor, porcentaje respecto al padre y porcentaje respecto al total.
-        add_trace(branchvalues = "total", name = "") # Ajusta cómo se calculan los nodos del treemap y añade la traza al gráfico.
+ggplotly(grafico +
+  coord_cartesian(xlim = c(0.3, 10), ylim = c(0, 7000)) +
+    scale_x_continuous(breaks = seq(0, 10, 1)) +
+    scale_y_continuous(breaks = seq(0, 7000, 1000)), tooltip = "text")
 ```
 
-```{r}
-#Posible interrogante para agregar al treemap
-# Ver proporcion de individuos q usan distintos navegadores 
-# Ver su relacion con los gastos o con los gastos de estados unidos
+En el grafico podemos observar que la tendencia del numero de visitas donde se efectuo una compra tiende a disminuir en el promedio del gasto por usuario. Podemos destacar que los usuarios con compras unicas tienen una mayor dispersion sobre su gasto y que la relacion entre mas visitas efectivas y el gasto promedio es inversa a la esperada.
 
-# grafico de barras para los dispositivos dentro de la base de estados unidos
-cookies %>% 
-  count(dispositivo, sort = TRUE)
-
-# grafico de barras para los navegadores dentro de la base de estados unidos
-
-cookies %>% 
-  count(browser, sort = TRUE)
-```
+## ¿Que tiempo de permanencia tienen los usuarios segun el navegador y el dispositivo que usa?
 
 ```{r}
-#opcion 1
-cookies_us <- cookies %>%
-  filter(pais == "United States") %>%
+cookies_navegador <- cookies %>%
   group_by(browser, dispositivo) %>%
-  summarise(tiempo_total = sum(tiempo, na.rm = TRUE), .groups = "drop")
+  summarise(tiempo_total = sum(tiempo, na.rm = TRUE)/60, .groups = "drop") |> 
+  mutate(
+    dispositivo = case_when(
+      dispositivo == "desktop" ~ "Escritorio",
+      dispositivo == "mobile"  ~ "Móvil",
+      dispositivo == "tablet"  ~ "Tablet"))
 
-cookies_us_tot <- cookies %>%
-  filter(pais == "United States") %>%
+cookies_treemap <- cookies_navegador %>%
   group_by(browser) %>%
-  summarise(tiempo_total = sum(tiempo, na.rm = TRUE), .groups = "drop") %>%
-  mutate(dispositivo = "Total navegador")  # para identificar la fila total
+  summarise(tiempo_total = sum(tiempo_total, na.rm = TRUE)/60) %>%
+  ungroup() |> 
+  rename(dispositivo = browser) |> 
+  mutate(browser = "Tiempo total (minutos)") |> # para identificar la fila total
+  bind_rows(cookies_navegador) |> 
+  mutate(etiqueta = ifelse(browser != "Tiempo total (minutos)", paste0(dispositivo, " - ", browser), dispositivo))
 
-cookies_treemap <- bind_rows(cookies_us, cookies_us_tot)
-
-cookies_treemap <- cookies_treemap %>%
-  mutate(etiqueta = ifelse(dispositivo == "Total navegador",
-                           browser,
-                           paste0(dispositivo, "-", browser)))
-
-plot_ly(
-  data = cookies_treemap,
+cookies_treemap |> 
+  plot_ly(
   type = "treemap",
   labels = ~etiqueta,
-  parents = ~ifelse(dispositivo == "Total navegador", "", browser),
+  parents = ~ifelse(dispositivo == "Tiempo total (minutos)", "", browser),
   values = ~tiempo_total,
-  textinfo = "label+value+percent parent+percent root",
-  hoverinfo = "label+value+percent parent") |> 
+  hoverinfo = "label+value+percent parent+percent root",
+  textinfo = "label+value+percent parent+percent root") |> 
   add_trace(branchvalues = "total", name = "")
+
 ```
 
-```{r}
-# opcion 2
-cookies_us <- cookies %>%
-  group_by(browser, dispositivo) %>%
-  summarise(tiempo_total = sum(tiempo, na.rm = TRUE), .groups = "drop")
+Segun el grafico podemos observar que los navegadores que mas tiempo de permanencia tienen en la pagina web son Chrome, Safari y Firefox, de los cuales se destaca el uso de dispositivos de escritorio para Chrome y Firefox y el uso de movil para Safari.
 
-cookies_us_tot <- cookies %>%
-  group_by(browser) %>%
-  summarise(tiempo_total = sum(tiempo, na.rm = TRUE), .groups = "drop") %>%
-  mutate(dispositivo = "Total navegador")  # para identificar la fila total
 
-cookies_treemap <- bind_rows(cookies_us, cookies_us_tot)
 
-cookies_treemap <- cookies_treemap %>%
-  mutate(etiqueta = ifelse(dispositivo == "Total navegador",
-                           browser,
-                           paste0(dispositivo, "-", browser)))
 
-plot_ly(
-  data = cookies_treemap,
-  type = "treemap",
-  labels = ~etiqueta,
-  parents = ~ifelse(dispositivo == "Total navegador", "", browser),
-  values = ~tiempo_total,
-  textinfo = "label+value+percent parent+percent root",
-  hoverinfo = "label+value+percent parent") |> 
-  add_trace(branchvalues = "total", name = "")
-```
+
+
+
