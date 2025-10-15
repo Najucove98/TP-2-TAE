@@ -31,16 +31,18 @@ library(leaflet.extras) #para crear el mapa de calor
 library(countrycode) #para codificar los paises
 library(rnaturalearth) # Para obtener los poligonos de cada pais
 #library(sf) no usamos
+library(plotly)
+library(htmltools) # Para control de titulos
+
+# Elimina la notacion cientifica
+options(scipen = 999)
 
 # Carga de los datos
 cookies <- read.delim("cookies.txt")
-
-# Exploración de los datos
-# summary(cookies)
 ```
 # Introducción
 
-Este informe presenta un análisis descriptivo de la base de datos de un sitio web de compras online [shop.merch.google](https://shop.merch.google/), con el objetivo de encontrar distintas relaciones entre las variables provistas.
+Este informe presenta un análisis descriptivo de la base de datos de un sitio web de compras online ([shop.merch.google](https://shop.merch.google/)), con el objetivo de encontrar distintas relaciones entre las variables provistas.
 
 La base de datos original contiene variables clave como:
 
@@ -100,13 +102,19 @@ mapa_datos |>
     values = ~Total_Visitas,
     opacity = 0.6,
     title = "Total de Visitas",
-    position = "bottomright")
+    position = "bottomright") |> 
+  addControl(
+    html = tags$div(
+      style = "font-size: 20px; font-weight: bold; background-color: white; padding: 6px; border-radius: 4px;",
+      "Distribución Geográfica del Total de Visitas"), position = "topright")
+
+
+
 ```
 
 El mapa muestra la distribución geográfica del total de visitas al sitio web durante el período analizado. Se observa una marcada concentración en Estados Unidos, país que registra un volumen de accesos significativamente superior al resto del mundo, lo cual podria ocasinar una fuerte dependencia comercial con el mercado estadounidense. 
 
-Debido a esto, podría recomendarse una expasión a nivel internacional de la página web
-para que de esta manera se amplie la base de clientes potenciales.
+Debido a esto, podría recomendarse una expasión a nivel internacional de la página web para que de esta manera se amplie la base de clientes potenciales.
 
 ## ¿Cómo evolucionó la cantidad de compras a lo largo de las semanas analizadas?
 
@@ -128,7 +136,7 @@ datos_tiempo |>
   e_x_axis(name = "Semana", serie = semana) |> 
   e_y_axis(name = "Gasto (en USD)") |> 
   e_legend(orient = "vertical", left = "10%", top = "10%")  |> 
-  e_tooltip(trigger = "axis") 
+  e_tooltip(trigger = "axis")
 ```
 
 El gráfico muestra la evolución semanal del gasto total en el sitio web, diferenciando a Estados Unidos del resto de los paises. 
@@ -139,43 +147,48 @@ El gasto de los demás paises es plano con respecto a Estados Unidos.Esto reafir
 ## ¿La cantidad de visitas donde se efectuo una compra esta relacionado con el gasto promedio por usuario?
 
 ```{r}
-library(plotly) 
-# Contar cuántas visitas hizo cada ID
+# Creación de la base de datos por visita donde se realizó una compra de los usuarios
 visitas_por_id <- cookies |> 
-  filter(gasto > 0) %>%
-  group_by(ID) %>%
+  filter(gasto > 0) |> 
+  group_by(ID) |> 
   summarise(n_visitas_efectivas = n(),
             gasto = mean(gasto),
             tiempo = mean(tiempo),
             clicks = mean(clicks),
             paginas = mean(paginas))
 
+# Gráfico de dispersión de los valores promedio del gasto por usuario vs número de visitas efectivas
 grafico <- ggplot(data = visitas_por_id) +
   aes(x = n_visitas_efectivas, 
       y = gasto,
       text = paste0(
-    "<b>Visitas efectivas: </b>", n_visitas_efectivas, "<br>",
-    "<b>Gasto promedio: </b>", round(gasto, 2), " USD <br>",
-    "<b>Tiempo promedio: </b>", round(tiempo, 2), " min <br>",
-    "<b>Clicks promedio: </b>", round(clicks), "<br>",
-    "<b>Paginas promedio: </b>", round(paginas))) +
+        "<b>Visitas efectivas: </b>", n_visitas_efectivas, "<br>",
+        "<b>Gasto promedio: </b>", round(gasto, 2), " USD <br>",
+        "<b>Tiempo promedio: </b>", round(tiempo, 2), " min <br>",
+        "<b>Clicks promedio: </b>", round(clicks), "<br>",
+        "<b>Paginas promedio: </b>", round(paginas))) +
   geom_point() +
   labs(x = "Visitas efectivas",
        y = "Gasto promedio",
        title = "Relación Visitas efectivas vs. Gasto promedio") +
-  
   theme_bw()
 
-ggplotly(grafico, tooltip = "text")
+# Gráfico de dispersión dinámico con la librería plotly
+ggplotly(grafico + 
+           scale_x_continuous(breaks = seq(0, 30, 5)) +
+           scale_y_continuous(breaks = seq(0, 8000, 1000)), 
+         tooltip = "text")
 ```
 
 El grafico describe la relacion entre el numero de visitas efectivas y el gasto promedio por usuario donde se observa dos valores atipicos. Por lo cual procedemos a visualizar la mayor concentracion de usuarios.
 
 ```{r}
+# Gráfico de dispersión dinámico con zoom sin considerar los valores atipicos
 ggplotly(grafico +
-  coord_cartesian(xlim = c(0.3, 10), ylim = c(0, 7000)) +
-    scale_x_continuous(breaks = seq(0, 10, 1)) +
-    scale_y_continuous(breaks = seq(0, 7000, 1000)), tooltip = "text")
+           coord_cartesian(xlim = c(0.3, 10), ylim = c(0, 7000)) +
+           scale_x_continuous(breaks = seq(0, 10, 1)) +
+           scale_y_continuous(breaks = seq(0, 7000, 1000)), 
+         tooltip = "text")
 ```
 
 En el grafico podemos observar que la tendencia del numero de visitas donde se efectuo una compra tiende a disminuir en el promedio del gasto por usuario. Podemos destacar que los usuarios con compras unicas tienen una mayor dispersion sobre su gasto y que la relacion entre mas visitas efectivas y el gasto promedio es inversa a la esperada.
@@ -183,8 +196,9 @@ En el grafico podemos observar que la tendencia del numero de visitas donde se e
 ## ¿Que tiempo de permanencia tienen los usuarios segun el navegador y el dispositivo que usa?
 
 ```{r}
-cookies_navegador <- cookies %>%
-  group_by(browser, dispositivo) %>%
+# Creación de la base de datos sobre navegador y dispositivos
+cookies_navegador <- cookies |> 
+  group_by(browser, dispositivo) |> 
   summarise(tiempo_total = sum(tiempo, na.rm = TRUE)/60, .groups = "drop") |> 
   mutate(
     dispositivo = case_when(
@@ -192,25 +206,26 @@ cookies_navegador <- cookies %>%
       dispositivo == "mobile"  ~ "Móvil",
       dispositivo == "tablet"  ~ "Tablet"))
 
-cookies_treemap <- cookies_navegador %>%
-  group_by(browser) %>%
-  summarise(tiempo_total = sum(tiempo_total, na.rm = TRUE)/60) %>%
+# Creación de la base de datos para utilizar en el treemap
+cookies_treemap <- cookies_navegador |> 
+  group_by(browser) |> 
+  summarise(tiempo_total = sum(tiempo_total, na.rm = TRUE)/60) |> 
   ungroup() |> 
   rename(dispositivo = browser) |> 
-  mutate(browser = "Tiempo total (minutos)") |> # para identificar la fila total
+  mutate(browser = "Tiempo total (minutos)") |> 
   bind_rows(cookies_navegador) |> 
   mutate(etiqueta = ifelse(browser != "Tiempo total (minutos)", paste0(dispositivo, " - ", browser), dispositivo))
 
+# Creación del treemap
 cookies_treemap |> 
   plot_ly(
-  type = "treemap",
-  labels = ~etiqueta,
-  parents = ~ifelse(dispositivo == "Tiempo total (minutos)", "", browser),
-  values = ~tiempo_total,
-  hoverinfo = "label+value+percent parent+percent root",
-  textinfo = "label+value+percent parent+percent root") |> 
+    type = "treemap",
+    labels = ~etiqueta,
+    parents = ~ifelse(dispositivo == "Tiempo total (minutos)", "", browser),
+    values = ~tiempo_total,
+    hoverinfo = "label+value+percent parent+percent root",
+    textinfo = "label+value+percent parent+percent root") |> 
   add_trace(branchvalues = "total", name = "")
-
 ```
 
 Segun el grafico podemos observar que los navegadores que mas tiempo de permanencia tienen en la pagina web son Chrome, Safari y Firefox, de los cuales se destaca el uso de dispositivos de escritorio para Chrome y Firefox y el uso de movil para Safari.
