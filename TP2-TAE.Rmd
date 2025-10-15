@@ -86,6 +86,7 @@ paleta_colores <- colorNumeric(
 # Generacion del mapa con la libreria leaflet
 mapa_datos |> 
   leaflet() |> 
+  setView(lng = 0, lat = 20, zoom = 1) |> 
   addProviderTiles('OpenStreetMap.Mapnik') |>
   addPolygons(
     fillColor = ~paleta_colores(Total_Visitas),
@@ -105,8 +106,13 @@ mapa_datos |>
     position = "bottomright") |> 
   addControl(
     html = tags$div(
-      style = "font-size: 20px; font-weight: bold; background-color: white; padding: 6px; border-radius: 4px;",
-      "Distribución Geográfica del Total de Visitas"), position = "topright")
+      style = "font-size: 20px; 
+               font-weight: bold; 
+               background-color: white; 
+               padding: 6px; 
+               border-radius: 4px;",
+              "Distribución Geográfica del Total de Visitas"), 
+      position = "topright")
 
 
 
