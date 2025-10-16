@@ -20,21 +20,24 @@ lightbox: true
 ---
 
 ```{r}
-# Librerias usadas
-#library(tidyverse) #Solo poner las librerias que usemos
-library(dplyr) #manipulacion de datos
-library(ggplot2) #graficar
-#library(readxl) #leectura de archivos
-library(lubridate) #manipulacion de datos
-library(echarts4r) #grafico linea temporal
-library(leaflet.extras) #para crear el mapa de calor
-library(countrycode) #para codificar los paises
-library(rnaturalearth) # Para obtener los poligonos de cada pais
-#library(sf) no usamos
-library(plotly)
-library(htmltools) # Para control de titulos
+# Librerías para manipular los datos
+library(dplyr)
+library(lubridate)
+library(countrycode)
 
-# Elimina la notacion cientifica
+# Librerías para graficar
+library(ggplot2)
+library(leaflet.extras) # Mapa
+library(echarts4r) # Linea temporal 
+library(plotly) # Gráfico de dispersión y treemap
+
+# Base de datos con los polígonos para hacer mapa
+library(rnaturalearth)
+
+# Para control de titulos
+library(htmltools)
+
+# Elimina la notación cientifica
 options(scipen = 999)
 
 # Carga de los datos
@@ -42,7 +45,7 @@ cookies <- read.delim("cookies.txt")
 ```
 # Introducción
 
-Este informe presenta un análisis descriptivo de la base de datos de un sitio web de compras online ([shop.merch.google](https://shop.merch.google/)), con el objetivo de encontrar distintas relaciones entre las variables provistas.
+Se cuenta con la base de datos de un sitio web de compras online ([shop.merch.google](https://shop.merch.google/)), con el fin de encontrar distintas relaciones entre las variables provistas, se procede a hacer un análisis descriptivo de las visitas al sitio web para responder distintas interrogantes.
 
 La base de datos original contiene variables clave como:
 
@@ -113,16 +116,15 @@ mapa_datos |>
                border-radius: 4px;",
               "Distribución Geográfica del Total de Visitas"), 
       position = "topright")
-
-
-
 ```
+<br>
+El mapa muestra la distribución geográfica del total de visitas al sitio web durante el período analizado (Enero-Junio de 2017). Se observa una marcada concentración en **Estados Unidos** (EE. UU), país que registra un volumen de accesos significativamente superior al resto del mundo.
 
-El mapa muestra la distribución geográfica del total de visitas al sitio web durante el período analizado. Se observa una marcada concentración en Estados Unidos, país que registra un volumen de accesos significativamente superior al resto del mundo, lo cual podria ocasinar una fuerte dependencia comercial con el mercado estadounidense. 
+**Estados Unidos** alcanza un total de 172,200 visitas registradas, siendo más de 6 veces el número de visitas del segundo país más relevante, **India**, que cuenta con 24,359 visitas. Esta concentración podría ocasionar una fuerte dependencia comercial con el mercado estadounidense.
 
-Debido a esto, podría recomendarse una expasión a nivel internacional de la página web para que de esta manera se amplie la base de clientes potenciales.
+Debido a esto, se recomienda una expansión a nivel internacional de la página web para que, de esta manera, se amplíe la base de clientes potenciales.
 
-## ¿Cómo evolucionó la cantidad de compras a lo largo de las semanas analizadas?
+## ¿Cómo se distribuyó el gasto total semanalmente, y qué diferencia se observa entre el gasto de Estados Unidos y el del resto de países?
 
 ```{r}
 # Creacion de la base para la linea temporal
@@ -145,10 +147,11 @@ datos_tiempo |>
   e_tooltip(trigger = "axis")
 ```
 
-El gráfico muestra la evolución semanal del gasto total en el sitio web, diferenciando a Estados Unidos del resto de los paises. 
-Se puede observar que el gasto realizado en Estados unidos es ampliamente superior en el periodo de tiempo analizado, ademas de  presentar picos muchos mas marcados en la temporada Abril-Mayo.
+La línea temporal muestra la evolución semanal del gasto total en el sitio web, diferenciando a **Estados Unidos** (EE. UU.) del resto de los países.
 
-El gasto de los demás paises es plano con respecto a Estados Unidos.Esto reafirma lo mencionado en el gráfico anterior, que la actividad económica del sitio se encuentra reducida a este país particular. Los picos se encuentran distribuidos uniformemente a lo largo de los meses. 
+Se puede observar que el gasto realizado en **Estados Unidos** es ampliamente superior en el periodo de tiempo analizado, además de presentar picos mucho más marcados en la temporada Abril-Mayo de 2017.
+
+El gasto total del resto de países (sin considerar a **Estados Unidos**) a lo largo del periodo analizado presenta picos que se encuentran distribuidos uniformemente a lo largo de los meses, sin ninguna concentración en algún mes en particular.
 
 ## ¿La cantidad de visitas donde se efectuo una compra esta relacionado con el gasto promedio por usuario?
 
@@ -168,15 +171,15 @@ grafico <- ggplot(data = visitas_por_id) +
   aes(x = n_visitas_efectivas, 
       y = gasto,
       text = paste0(
-        "<b>Visitas efectivas: </b>", n_visitas_efectivas, "<br>",
-        "<b>Gasto promedio: </b>", round(gasto, 2), " USD <br>",
-        "<b>Tiempo promedio: </b>", round(tiempo, 2), " min <br>",
+        "<b>Nº de Visitas Efectivas: </b>", n_visitas_efectivas, "<br>",
+        "<b>Gasto Promedio: </b>", round(gasto, 2), " USD <br>",
+        "<b>Tiempo promedio: </b>", round(tiempo/60, 2), " min <br>",
         "<b>Clicks promedio: </b>", round(clicks), "<br>",
         "<b>Paginas promedio: </b>", round(paginas))) +
   geom_point() +
-  labs(x = "Visitas efectivas",
-       y = "Gasto promedio",
-       title = "Relación Visitas efectivas vs. Gasto promedio") +
+  labs(x = "Nº de Visitas Efectivas",
+       y = "Gasto Promedio por Visita (USD)",
+       title = "Relación Gasto Promedio vs. Frecuencia de Compra") +
   theme_bw()
 
 # Gráfico de dispersión dinámico con la librería plotly
@@ -185,8 +188,8 @@ ggplotly(grafico +
            scale_y_continuous(breaks = seq(0, 8000, 1000)), 
          tooltip = "text")
 ```
-
-El grafico describe la relacion entre el numero de visitas efectivas y el gasto promedio por usuario donde se observa dos valores atipicos. Por lo cual procedemos a visualizar la mayor concentracion de usuarios.
+<br>
+El gráfico describe la relación entre el número de visitas efectivas (donde se efectuó una compra) y el gasto promedio por usuario. Se puede observar la presencia de dos usuarios con valores atípicos (outliers) que se alejan del comportamiento de la mayoría, por lo cual se procede a visualizar el grupo de usuarios sin estos datos atípicos.
 
 ```{r}
 # Gráfico de dispersión dinámico con zoom sin considerar los valores atipicos
@@ -196,10 +199,16 @@ ggplotly(grafico +
            scale_y_continuous(breaks = seq(0, 7000, 1000)), 
          tooltip = "text")
 ```
+<br>
+En el gráfico podemos observar que la tendencia en el gasto promedio por visita de los usuarios disminuye a medida que aumenta el número de visitas efectivas (compras).
 
-En el grafico podemos observar que la tendencia del numero de visitas donde se efectuo una compra tiende a disminuir en el promedio del gasto por usuario. Podemos destacar que los usuarios con compras unicas tienen una mayor dispersion sobre su gasto y que la relacion entre mas visitas efectivas y el gasto promedio es inversa a la esperada.
+Podemos destacar que:
 
-## ¿Que tiempo de permanencia tienen los usuarios segun el navegador y el dispositivo que usa?
+- Los usuarios con compras únicas (1 visita efectiva) tienen la mayor dispersión en su gasto promedio, alcanzando los valores más altos (7000 USD).
+
+- Los usuarios con más visitas efectivas (mayor frecuencia de compra) tienden a concentrar la variabilidad del gasto promedio en un rango mucho menor (alrededor de 1,000 USD o menos).
+
+## ¿Qué tiempo de permanencia tienen los usuarios según el navegador y el dispositivo que usa?
 
 ```{r}
 # Creación de la base de datos sobre navegador y dispositivos
@@ -215,7 +224,7 @@ cookies_navegador <- cookies |>
 # Creación de la base de datos para utilizar en el treemap
 cookies_treemap <- cookies_navegador |> 
   group_by(browser) |> 
-  summarise(tiempo_total = sum(tiempo_total, na.rm = TRUE)/60) |> 
+  summarise(tiempo_total = sum(tiempo_total, na.rm = TRUE)) |> 
   ungroup() |> 
   rename(dispositivo = browser) |> 
   mutate(browser = "Tiempo total (minutos)") |> 
@@ -231,14 +240,15 @@ cookies_treemap |>
     values = ~tiempo_total,
     hoverinfo = "label+value+percent parent+percent root",
     textinfo = "label+value+percent parent+percent root") |> 
+  layout(
+    title = list(
+      text = "Distribución del Tiempo total por Navegador y Dispositivo",
+      font = list(size = 18))) |> 
   add_trace(branchvalues = "total", name = "")
 ```
 
-Segun el grafico podemos observar que los navegadores que mas tiempo de permanencia tienen en la pagina web son Chrome, Safari y Firefox, de los cuales se destaca el uso de dispositivos de escritorio para Chrome y Firefox y el uso de movil para Safari.
+En el gráfico podemos observar la distribución del tiempo total de permanencia (en minutos) de todas las visitas, segmentado por navegador web y tipo de dispositivo.
 
+El navegador más utilizado en el sitio web es **Chrome**, cuyo tiempo total representa el 78% entre todos los navegadores. Dentro de Chrome, el 83% del tiempo total de este navegador corresponde a usuarios con dispositivos de **escritorio** (desktop).
 
-
-
-
-
-
+En segundo lugar, el navegador **Safari** concentra el 14% del tiempo total entre todos los navegadores. En este caso, el dispositivo más utilizado es el **móvil**, representando el 57% del tiempo total de uso de Safari.
